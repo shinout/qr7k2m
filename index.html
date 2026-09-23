@@ -106,6 +106,18 @@
       border:.8pt solid #000;padding:3mm;margin:0}
 
     /* 項目ごとのQR。2カラム。4項目なら1ページに収まる */
+    /* QR用紙の上部。ここは短く。URL の QR さえ読めれば、続きは画面が説明する */
+    .qhead{display:flex;gap:4mm;align-items:flex-start;
+      border-bottom:1px solid #000;padding-bottom:3mm;margin-bottom:5mm}
+    .qhead .hq{flex:0 0 auto;line-height:0}
+    .qhead .hq svg{display:block;width:26mm;height:26mm}
+    .qhead .hb{flex:1;min-width:0}
+    .qhead h2{font-size:13pt;margin:0 0 1mm;letter-spacing:.02em}
+    .qhead .m{font-size:8pt;color:#444;margin:0 0 1.5mm}
+    .qhead .s{font-size:8.5pt;line-height:1.55;margin:0}
+    .qhead .u{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:8pt}
+    .qhead .c{font-size:7.5pt;color:#333;line-height:1.45;margin:1.5mm 0 0}
+
     .qgrid{display:grid;grid-template-columns:1fr 1fr;gap:6mm 8mm}
     .qitem{break-inside:avoid;page-break-inside:avoid;
       border:.5pt solid #999;padding:4mm;display:flex;flex-direction:column;gap:3mm}
@@ -131,7 +143,6 @@
     .fallback .u{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:8.5pt}
     .fallback .fbqr svg{display:block;width:32mm;height:32mm}
     .fallback code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-    .qbreak{break-after:page;page-break-after:always;height:0}
     .foot{margin-top:8mm;border-top:1px solid #000;padding-top:2mm;font-size:8pt;color:#444;
       display:flex;justify-content:space-between}
   }
@@ -736,35 +747,24 @@ function buildPlainSheet() {
 
 function buildQrSheet(items) {
   const url = $("toolUrl").value.trim();
-  const urlSvg = url ? QR.toSvg(url, { ecc:"M", scale:5, margin:3 }) : "";
-  // 手順とURLのQRは1ページ目に置き、そこでページを切る。
-  // 項目のQRと同じ紙に並べると、スマホのカメラが先にURLのQRを拾ってしまう。
-  $("sheet").innerHTML = sheetHeader() + `
-    <div class="caution">
-      QRの中身は暗号化されています。読み取っても意味のある文字は出ません。
-      復号にはあなたが記憶しているパスフレーズが必要で、それはどこにも書かれていません。
-      紙を更新したら古い紙は必ず処分すること。
-    </div>
-    <div class="fallback">
-      ${url ? `<div class="fbqr">${urlSvg}</div>` : ""}
-      <div class="fbbody">
-        <p class="fbt">手順</p>
-        <ol class="steps">
-          ${url
-            ? `<li>左の QR をスマホのカメラで読む。復号の画面が開く<br><span class="u">${esc(url)}</span></li>`
-            : `<li>ツール（<code>recovery-sheet.html</code>）をブラウザで開き、「読む（復号）」タブを選ぶ</li>`}
-          <li>「カメラで読み取る」を押し、<b>次のページ</b>から目的の QR を写す</li>
-          <li>パスフレーズを入れて「復号する」</li>
-        </ol>
-        <p class="fbn">
-          カメラが使えないときは、項目の QR をスマホの標準カメラで読み、
-          出てきた文字列を「暗号文」欄に貼り付ける。<br>
-          この紙（1枚目）は項目の紙と離して持つこと。同じ視野に入ると、
-          カメラがこの QR を先に読んでしまう。
-        </p>
+  const urlSvg = url ? QR.toSvg(url, { ecc:"M", scale:4, margin:3 }) : "";
+  const d = $("date").value || "";
+  const place = $("place").value.trim();
+
+  // 上部は短くする。URL の QR を読ませてしまえば、あとは開いた画面が説明する。
+  // 説明を紙に書き足すほど項目の QR が次ページへ押し出される。
+  $("sheet").innerHTML = `
+    <div class="qhead">
+      ${url ? `<div class="hq">${urlSvg}</div>` : ""}
+      <div class="hb">
+        <h2>${esc($("title").value)}</h2>
+        <p class="m">作成日 ${esc(d)}${place ? " ・ 保管場所 " + esc(place) : ""}</p>
+        <p class="s">${url
+          ? `左の QR を読む → 開いた画面で「カメラで読み取る」→ 下の QR を写す → パスフレーズを入れる<br><span class="u">${esc(url)}</span>`
+          : `ツール（<code>recovery-sheet.html</code>）を開き、「読む（復号）」タブから下の QR を写す`}</p>
+        <p class="c">下の QR は暗号化されています。読み取っても意味のある文字は出ません。紙を更新したら古い紙は処分すること。</p>
       </div>
     </div>
-    <div class="qbreak"></div>
     <div class="qgrid">
     ${items.map(it => `
       <div class="qitem">
@@ -775,7 +775,6 @@ function buildQrSheet(items) {
           <p class="len">${it.bytes} 文字 / ${it.ver}</p>
         </div>
       </div>`).join("")}
-    </div>
     </div>
     ` + sheetFooter(`暗号化済み ・ 項目 ${items.length} 件`);
 }
