@@ -123,10 +123,13 @@
     .fallback{break-inside:avoid;page-break-inside:avoid;display:flex;gap:4mm;align-items:flex-start;
       margin-top:5mm;border:.8pt solid #000;padding:3mm}
     .fallback .fbqr{flex:0 0 auto;line-height:0}
-    .fallback .fbqr svg{display:block;width:28mm;height:28mm}
     .fallback .fbbody{flex:1;min-width:0}
     .fallback .fbt{font-size:9.5pt;font-weight:700;margin:0 0 1.5mm}
-    .fallback .fbn{font-size:8pt;line-height:1.6;margin:0}
+    .fallback .fbn{font-size:8pt;line-height:1.6;margin:2mm 0 0;color:#333}
+    .fallback .steps{margin:0;padding-left:5mm;font-size:9pt;line-height:1.75}
+    .fallback .steps li{margin-bottom:.8mm}
+    .fallback .u{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:8.5pt}
+    .fallback .fbqr svg{display:block;width:32mm;height:32mm}
     .fallback code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
     .foot{margin-top:8mm;border-top:1px solid #000;padding-top:2mm;font-size:8pt;color:#444;
       display:flex;justify-content:space-between}
@@ -703,13 +706,10 @@ function buildPlainSheet() {
 // 項目ごとにQRを1つ作る。タイトルとメモは平文で印刷し、
 // アカウントとコードだけを暗号化してQRに入れる。
 // タイトルが見えても実害は小さく、緊急時にどのQRを読めばよいか分かる利点が大きい。
-// 紙に載せる復号スニペット。ツールもネットも無いときの最後の手段。
-// ブラウザのコンソールに貼って使う。外部依存なし。
-const DECRYPT_SNIPPET = '(async(b,p)=>{const[,s,i,c]=b.split("."),u=x=>Uint8Array.from(atob(x.replace(/-/g,"+").replace(/_/g,"/")),h=>h.charCodeAt(0)),k=await crypto.subtle.deriveKey({name:"PBKDF2",salt:u(s),iterations:600000,hash:"SHA-256"},await crypto.subtle.importKey("raw",new TextEncoder().encode(p),"PBKDF2",0,["deriveKey"]),{name:"AES-GCM",length:256},0,["decrypt"]);return new TextDecoder().decode(await crypto.subtle.decrypt({name:"AES-GCM",iv:u(i)},k,u(c)))})';
 
 function buildQrSheet(items) {
   const url = $("toolUrl").value.trim();
-  const fbSvg = QR.toSvg(DECRYPT_SNIPPET, { ecc:"M", scale:4, margin:3 });
+  const urlSvg = url ? QR.toSvg(url, { ecc:"M", scale:5, margin:3 }) : "";
   $("sheet").innerHTML = sheetHeader() + `
     <div class="caution">
       QRの中身は暗号化されています。復号にはパスフレーズが必要です。
@@ -723,25 +723,24 @@ function buildQrSheet(items) {
           <p class="len">${it.bytes} 文字 / ${it.ver}</p>
         </div>
       </div>`).join("")}
-    <div class="howto">
-      <b>読み方</b><br>
-      1. ツールを開く${url ? `： <b>${esc(url)}</b>` : "（<code>recovery-sheet.html</code>）"}<br>
-      2. 「読む（復号）」タブで「カメラで読み取る」を押し、目的の項目のQRを写す<br>
-      3. パスフレーズを入れて「復号する」<br>
-      カメラが使えないときは、QRをスマホの標準カメラで読んで出た文字列を貼り付ける<br>
-    </div>
     <div class="fallback">
-      <div class="fbqr">${fbSvg}</div>
+      ${url ? `<div class="fbqr">${urlSvg}</div>` : ""}
       <div class="fbbody">
-        <p class="fbt">オフラインでの復号</p>
+        <p class="fbt">手順</p>
+        <ol class="steps">
+          <li>${url
+              ? `左の QR をスマホのカメラで読み、開いたページを表示する<br><span class="u">${esc(url)}</span>`
+              : `ツール（<code>recovery-sheet.html</code>）をブラウザで開く`}</li>
+          <li>「読む（復号）」タブを開く</li>
+          <li>「カメラで読み取る」を押し、上の項目から目的の QR を写す</li>
+          <li>パスフレーズを入れて「復号する」</li>
+        </ol>
         <p class="fbn">
-          この QR を読むと JavaScript のコードが出る。ブラウザの開発者コンソールに貼って
-          <code>const d = &lt;貼り付けたコード&gt;</code> として、<code>await d("暗号文", "パスフレーズ")</code> を実行する。
-          外部ライブラリもネットワークも不要。<br>
-          仕様: AES-GCM 256bit / PBKDF2-SHA256 ${ITER.toLocaleString()}回 /
-          形式 <code>OWJ1.salt.iv.ciphertext</code>（いずれも base64url）。
+          カメラが使えないときは、項目の QR をスマホの標準カメラで読み、
+          出てきた文字列を「暗号文」欄に貼り付ける。
         </p>
       </div>
+    </div>
     </div>
     ` + sheetFooter(`暗号化済み ・ 項目 ${items.length} 件`);
 }
