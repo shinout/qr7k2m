@@ -1,0 +1,811 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QR</title>
+<style>
+  :root{
+    color-scheme: light dark;
+    --bg:#f6f5f2; --panel:#fff; --ink:#1b1a18; --dim:#6d6a64; --line:#e2dfd9;
+    --accent:#b4531f; --warn:#8a6d1f; --warnbg:#fdf6e0;
+    --ok:#3f7a46; --okbg:#eef6ee;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#17181c; --panel:#1f2126; --ink:#e9e7e3; --dim:#9a968e; --line:#2e3138;
+           --accent:#e08a4f; --warn:#d9b64a; --warnbg:#2a2412;
+           --ok:#6dbb72; --okbg:#16241a; }
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+    padding:0 16px 80px;
+  }
+  .wrap{max-width:900px;margin:0 auto}
+  header{padding:26px 0 8px}
+  h1{font-size:21px;font-weight:650;margin:0 0 4px}
+  .sub{color:var(--dim);font-size:13px;margin:0}
+
+  .note{border-radius:10px;padding:12px 14px;margin:16px 0;font-size:13px;line-height:1.7}
+  .note.warn{background:var(--warnbg);border:1px solid var(--warn)}
+  .note.ok{background:var(--okbg);border:1px solid var(--ok)}
+  .note b{color:inherit}
+
+  .tabs{display:flex;gap:6px;margin:20px 0 14px;border-bottom:1px solid var(--line)}
+  .tabs button{
+    font:inherit;font-size:14px;background:transparent;border:0;border-bottom:2px solid transparent;
+    color:var(--dim);padding:8px 14px;cursor:pointer;margin-bottom:-1px;
+  }
+  .tabs button.on{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+
+  .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0}
+  button{
+    font:inherit;font-size:13px;color:var(--ink);background:var(--panel);
+    border:1px solid var(--line);border-radius:8px;padding:7px 13px;cursor:pointer;
+  }
+  button:hover{border-color:var(--dim)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .spacer{flex:1}
+
+  label.lbl{font-size:12px;color:var(--dim);display:block;margin-bottom:3px}
+  input, textarea{
+    width:100%;font:inherit;padding:7px 10px;border:1px solid var(--line);
+    border-radius:8px;background:var(--panel);color:var(--ink);
+  }
+  textarea{resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+  .meta{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+  .meta > div{flex:1 1 220px}
+
+  .entry{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin:12px 0}
+  .entry .row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  .entry .row > div{flex:1 1 200px;min-width:0}
+  .entry .head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .entry .head strong{font-size:13px;color:var(--dim);font-weight:600}
+  .del{border:0;background:transparent;color:var(--dim);font-size:18px;padding:0 6px;line-height:1}
+  .hint{font-size:11.5px;color:var(--dim);margin-top:4px}
+  .entry textarea{min-height:64px}
+
+  .pane{display:none}
+  .pane.on{display:block}
+
+  #out{min-height:200px;font-size:12px;line-height:1.5}
+  .strength{font-size:12px;margin-top:5px}
+  .strength.weak{color:var(--warn)}
+  .strength.good{color:var(--ok)}
+
+  /* ---------- 印刷 ---------- */
+  .sheet{display:none}
+  @media print{
+    @page{ size:A4; margin:14mm 14mm 16mm; }
+    body{background:#fff;color:#000;padding:0;font-size:10.5pt}
+    .wrap > *:not(.sheet){display:none !important}
+    .sheet{display:block}
+
+    .sheet h2{font-size:15pt;margin:0 0 2mm;letter-spacing:.02em}
+    .sheet .sheetmeta{font-size:9pt;color:#444;margin:0 0 6mm;border-bottom:1px solid #000;padding-bottom:2mm}
+    .sheet .caution{border:1.2pt solid #000;padding:2.5mm 3mm;font-size:8.5pt;line-height:1.5;margin-bottom:6mm}
+
+    .item{break-inside:avoid;page-break-inside:avoid;margin-bottom:7mm;border-bottom:.5pt solid #999;padding-bottom:5mm}
+    .item:last-child{border-bottom:0}
+    .item .t{font-size:12pt;font-weight:700;margin:0 0 1mm}
+    .item .a{font-size:9.5pt;color:#333;margin:0 0 2mm}
+    .item .n{font-size:9pt;color:#222;margin:0 0 3mm;white-space:pre-wrap}
+    .item .codes{display:grid;grid-template-columns:repeat(2,1fr);gap:1.5mm 6mm}
+    .item .code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11pt;
+      letter-spacing:.04em;display:flex;align-items:center;gap:2.5mm}
+    .item .code .box{display:inline-block;width:3.2mm;height:3.2mm;border:.8pt solid #000;flex:0 0 auto}
+
+    /* 暗号文 */
+    .cipher{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:9.5pt;
+      line-height:1.75;letter-spacing:.06em;word-break:break-all;white-space:pre-wrap;
+      border:.8pt solid #000;padding:3mm;margin:0}
+
+    /* 項目ごとのQR */
+    .qitem{break-inside:avoid;page-break-inside:avoid;display:flex;gap:5mm;
+      align-items:flex-start;margin-bottom:6mm;border-bottom:.5pt solid #999;padding-bottom:5mm}
+    .qitem:last-of-type{border-bottom:0}
+    .qitem .qr{flex:0 0 auto;line-height:0}
+    .qitem .qr svg{display:block;width:38mm;height:38mm}
+    .qitem .body{flex:1;min-width:0;padding-top:1mm}
+    .qitem .t{font-size:11.5pt;font-weight:700;margin:0 0 1mm}
+    .qitem .a{font-size:9pt;color:#333;margin:0 0 1.5mm}
+    .qitem .n{font-size:8.5pt;color:#222;margin:0;line-height:1.55;white-space:pre-wrap}
+    .qitem .len{font-size:7.5pt;color:#666;margin:2mm 0 0;
+      font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+    .howto{font-size:8.5pt;line-height:1.6;margin:4mm 0 0}
+    .howto code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+
+    .fallback{break-inside:avoid;page-break-inside:avoid;display:flex;gap:4mm;align-items:flex-start;
+      margin-top:5mm;border:.8pt solid #000;padding:3mm}
+    .fallback .fbqr{flex:0 0 auto;line-height:0}
+    .fallback .fbqr svg{display:block;width:28mm;height:28mm}
+    .fallback .fbbody{flex:1;min-width:0}
+    .fallback .fbt{font-size:9.5pt;font-weight:700;margin:0 0 1.5mm}
+    .fallback .fbn{font-size:8pt;line-height:1.6;margin:0}
+    .fallback code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+    .foot{margin-top:8mm;border-top:1px solid #000;padding-top:2mm;font-size:8pt;color:#444;
+      display:flex;justify-content:space-between}
+  }
+</style>
+</head>
+
+<div class="wrap">
+  <header>
+    <h1>QR</h1>
+    <p class="sub"></p>
+  </header>
+
+  <div class="note warn">
+    入力内容は保存されません。ネットワークにも送りません。
+  </div>
+
+  <div class="tabs">
+    <button id="tab-make" class="on">作る</button>
+    <button id="tab-open">読む（復号）</button>
+  </div>
+
+  <!-- ========== 作る ========== -->
+  <div class="pane on" id="pane-make">
+    <div class="meta">
+      <div>
+        <label class="lbl">シート名</label>
+        <input id="title" value="">
+      </div>
+      <div>
+        <label class="lbl">日付</label>
+        <input id="date" type="date">
+      </div>
+      <div>
+        <label class="lbl">メモ（平文で印刷）</label>
+        <input id="place" placeholder="">
+      </div>
+      <div style="flex:1 1 100%">
+        <label class="lbl">URL（平文で印刷）</label>
+        <input id="toolUrl" placeholder="">
+        
+      </div>
+    </div>
+
+    
+
+    <div class="bar">
+      <button id="add">＋ 項目を追加</button>
+            <span class="spacer"></span>
+      <button id="clear">全部消す</button>
+    </div>
+
+    <div id="entries"></div>
+
+    <div class="note ok" style="margin-top:20px">
+      パスフレーズは保存されません。忘れると復号できません。
+    </div>
+
+    <div class="meta">
+      <div>
+        <label class="lbl">パスフレーズ</label>
+        <input id="pass1" type="password" autocomplete="new-password" placeholder="">
+        <div class="strength" id="strength"></div>
+      </div>
+      <div>
+        <label class="lbl">確認のためもう一度</label>
+        <input id="pass2" type="password" autocomplete="new-password">
+      </div>
+    </div>
+
+    <div class="bar">
+      <button id="encrypt" class="primary">暗号化して QR で印刷する</button>
+      <button id="printPlain">暗号化せずに印刷する</button>
+      <span class="spacer"></span>
+      <span class="hint" id="encMsg"></span>
+    </div>
+    
+  </div>
+
+  <!-- ========== 読む ========== -->
+  <div class="pane" id="pane-open">
+    <div class="note warn">
+      紙に書かれた暗号文をここに貼り付け、パスフレーズを入れると中身が出ます。
+      改行や空白は無視されるので、見たまま写して構いません。
+    </div>
+    <div>
+      <label class="lbl">暗号文</label>
+      <textarea id="cipherIn" style="min-height:160px" placeholder=""></textarea>
+    </div>
+    <div class="meta" style="margin-top:12px">
+      <div>
+        <label class="lbl">パスフレーズ</label>
+        <input id="passOpen" type="password" autocomplete="off">
+      </div>
+    </div>
+    <div class="bar">
+      <button id="decrypt" class="primary">復号する</button>
+      <span class="spacer"></span>
+      <span class="hint" id="decMsg"></span>
+    </div>
+    <div>
+      <label class="lbl">中身</label>
+      <textarea id="out" readonly placeholder="復号すると、ここに出ます"></textarea>
+    </div>
+  </div>
+
+  <!-- 印刷用 -->
+  <div class="sheet" id="sheet"></div>
+</div>
+
+<!-- qr.js を埋め込み（build-recovery-sheet.sh / 2026-09-23） -->
+<script>
+/* 最小限の QR コード生成（バイトモード専用）。
+ *
+ * 外部ライブラリを読み込めない環境（file:// で開く単体HTML）のための自前実装。
+ * 対応: バージョン 1〜40 / 誤り訂正レベル L,M,Q,H / バイトモードのみ。
+ * 数字・英数モードの最適化はしない。用途が base64url 文字列なので不要。
+ *
+ * 使い方:
+ *   const mod = QR.encode("text", "M");   // mod[y][x] が true なら黒
+ *   QR.toSvg("text", { ecc:"M", scale:4, margin:4 })  // SVG 文字列
+ */
+const QR = (() => {
+  "use strict";
+
+  /* ---------- ガロア体 GF(256) ---------- */
+  const EXP = new Uint8Array(512), LOG = new Uint8Array(256);
+  (() => {
+    let x = 1;
+    for (let i = 0; i < 255; i++) {
+      EXP[i] = x; LOG[x] = i;
+      x <<= 1;
+      if (x & 0x100) x ^= 0x11d;
+    }
+    for (let i = 255; i < 512; i++) EXP[i] = EXP[i - 255];
+  })();
+  const mul = (a, b) => (a === 0 || b === 0) ? 0 : EXP[LOG[a] + LOG[b]];
+
+  function rsGenerator(deg) {
+    let poly = [1];
+    for (let i = 0; i < deg; i++) {
+      const next = new Array(poly.length + 1).fill(0);
+      for (let j = 0; j < poly.length; j++) {
+        next[j] ^= mul(poly[j], 1);
+        next[j + 1] ^= mul(poly[j], EXP[i]);
+      }
+      poly = next;
+    }
+    return poly;
+  }
+  function rsEncode(data, ecLen) {
+    const gen = rsGenerator(ecLen);
+    const res = new Uint8Array(ecLen);
+    for (const byte of data) {
+      const factor = byte ^ res[0];
+      res.copyWithin(0, 1); res[ecLen - 1] = 0;
+      if (factor !== 0) for (let i = 0; i < ecLen; i++) res[i] ^= mul(gen[i + 1], factor);
+    }
+    return res;
+  }
+
+  /* ---------- 容量表 ---------- */
+  // 各バージョンの [総コードワード, [L,M,Q,H] のECコードワード数/ブロック, [L,M,Q,H] のブロック数]
+  const EC_CODEWORDS = [
+    null,
+    [7,10,13,17],[10,16,22,28],[15,26,36,44],[20,36,52,64],[26,48,72,88],
+    [36,64,96,112],[40,72,108,130],[48,88,132,156],[60,110,160,192],[72,130,192,224],
+    [80,150,224,264],[96,176,260,308],[104,198,288,352],[120,216,320,384],[132,240,360,432],
+    [144,280,408,480],[168,308,448,532],[180,338,504,588],[196,364,546,650],[224,416,600,700],
+    [224,442,644,750],[252,476,690,816],[270,504,750,900],[300,560,810,960],[312,588,870,1050],
+    [336,644,952,1110],[360,700,1020,1200],[390,728,1050,1260],[420,784,1140,1350],[450,812,1200,1440],
+    [480,868,1290,1530],[510,924,1350,1620],[540,980,1440,1710],[570,1036,1530,1800],[570,1064,1590,1890],
+    [600,1120,1680,1980],[630,1204,1770,2100],[660,1260,1860,2220],[720,1316,1950,2310],[750,1372,2040,2430]
+  ];
+  const BLOCKS = [
+    null,
+    [1,1,1,1],[1,1,1,1],[1,1,2,2],[1,2,2,4],[1,2,4,4],
+    [2,4,4,4],[2,4,6,5],[2,4,6,6],[2,5,8,8],[4,5,8,8],
+    [4,5,8,11],[4,8,10,11],[4,9,12,16],[4,9,16,16],[6,10,12,18],
+    [6,10,17,16],[6,11,16,19],[6,13,18,21],[7,14,21,25],[8,16,20,25],
+    [8,17,23,25],[9,17,23,34],[9,18,25,30],[10,20,27,32],[12,21,29,35],
+    [12,23,34,37],[12,25,34,40],[13,26,35,42],[14,28,38,45],[15,29,40,48],
+    [16,31,43,51],[17,33,45,54],[18,35,48,57],[19,37,51,60],[19,38,53,63],
+    [20,40,56,66],[21,43,59,70],[22,45,62,74],[24,47,65,77],[25,49,68,81]
+  ];
+  const ECL = { L:0, M:1, Q:2, H:3 };
+  const ECL_BITS = { L:1, M:0, Q:3, H:2 };
+
+  // 各バージョンの総コードワード数（JIS X 0510 / ISO 18004 の規定値）。
+  // 機能パターンを差し引く計算を自前でやると誤差が出るので、規格表をそのまま持つ。
+  const TOTAL_CODEWORDS = [
+    null,26,44,70,100,134,172,196,242,292,346,
+    404,466,532,581,655,733,815,901,991,1085,
+    1156,1258,1364,1474,1588,1706,1828,1921,2051,2185,
+    2323,2465,2611,2761,2876,3034,3196,3362,3532,3706
+  ];
+  const totalCodewords = (ver) => TOTAL_CODEWORDS[ver];
+
+  function alignPositions(ver) {
+    if (ver === 1) return [];
+    const n = Math.floor(ver / 7) + 2;
+    const size = ver * 4 + 17;
+    const step = (ver === 32) ? 26 : Math.ceil((size - 13) / (2 * n - 2)) * 2;
+    const res = [6];
+    for (let pos = size - 7; res.length < n; pos -= step) res.splice(1, 0, pos);
+    return res;
+  }
+
+  function capacityBytes(ver, ecl) {
+    const dataCw = totalCodewords(ver) - EC_CODEWORDS[ver][ECL[ecl]];
+    // ヘッダ: モード指示子 4bit + 文字数指示子 (v1-9: 8bit, v10-40: 16bit)
+    const headerBits = 4 + (ver < 10 ? 8 : 16);
+    return Math.floor((dataCw * 8 - headerBits) / 8);
+  }
+
+  /* ---------- 本体 ---------- */
+  function encode(text, ecl = "M") {
+    const bytes = new TextEncoder().encode(text);
+
+    let ver = 0;
+    for (let v = 1; v <= 40; v++) {
+      if (bytes.length <= capacityBytes(v, ecl)) { ver = v; break; }
+    }
+    if (!ver) throw new Error("データが大きすぎます（" + bytes.length + " バイト）");
+
+    const size = ver * 4 + 17;
+    const nBlocks = BLOCKS[ver][ECL[ecl]];
+    const ecTotal = EC_CODEWORDS[ver][ECL[ecl]];   // 全ブロック合計のECコードワード数
+    const ecPer = ecTotal / nBlocks;
+    const dataCw = totalCodewords(ver) - ecTotal;
+
+    /* --- ビット列を作る --- */
+    const bits = [];
+    const push = (val, len) => { for (let i = len - 1; i >= 0; i--) bits.push((val >> i) & 1); };
+    push(0b0100, 4);                                  // バイトモード
+    push(bytes.length, ver < 10 ? 8 : 16);            // 文字数
+    for (const b of bytes) push(b, 8);
+    const capBits = dataCw * 8;
+    for (let i = 0; i < 4 && bits.length < capBits; i++) bits.push(0);   // 終端
+    while (bits.length % 8) bits.push(0);
+    const pad = [0xec, 0x11];
+    for (let i = 0; bits.length < capBits; i++) push(pad[i % 2], 8);
+
+    const data = new Uint8Array(dataCw);
+    for (let i = 0; i < dataCw; i++) {
+      let v = 0; for (let j = 0; j < 8; j++) v = (v << 1) | bits[i * 8 + j];
+      data[i] = v;
+    }
+
+    /* --- ブロック分割と誤り訂正 --- */
+    const shortLen = Math.floor(dataCw / nBlocks);
+    const nLong = dataCw % nBlocks;
+    const dBlocks = [], eBlocks = [];
+    let off = 0;
+    for (let i = 0; i < nBlocks; i++) {
+      const len = shortLen + (i >= nBlocks - nLong ? 1 : 0);
+      const blk = data.slice(off, off + len); off += len;
+      dBlocks.push(blk);
+      eBlocks.push(rsEncode(blk, ecPer));
+    }
+    const out = [];
+    const maxLen = Math.max(...dBlocks.map(b => b.length));
+    for (let i = 0; i < maxLen; i++) for (const b of dBlocks) if (i < b.length) out.push(b[i]);
+    for (let i = 0; i < ecPer; i++) for (const b of eBlocks) out.push(b[i]);
+
+    /* --- 配置 --- */
+    const mod = Array.from({length:size}, () => new Array(size).fill(null));
+    const fn  = Array.from({length:size}, () => new Array(size).fill(false));
+    const set = (x, y, v, isFn) => { if (x>=0&&y>=0&&x<size&&y<size) { mod[y][x]=v; if(isFn) fn[y][x]=true; } };
+
+    // 位置検出パターン
+    for (const [ox, oy] of [[0,0],[size-7,0],[0,size-7]]) {
+      for (let dy = -1; dy <= 7; dy++) for (let dx = -1; dx <= 7; dx++) {
+        const on = (dx>=0&&dx<7&&(dy===0||dy===6)) || (dy>=0&&dy<7&&(dx===0||dx===6)) ||
+                   (dx>=2&&dx<=4&&dy>=2&&dy<=4);
+        set(ox+dx, oy+dy, on, true);
+      }
+    }
+    // 位置合わせパターン
+    const ap = alignPositions(ver);
+    for (const ay of ap) for (const ax of ap) {
+      if ((ax===6&&ay===6)||(ax===6&&ay===size-7)||(ax===size-7&&ay===6)) continue;
+      for (let dy=-2; dy<=2; dy++) for (let dx=-2; dx<=2; dx++)
+        set(ax+dx, ay+dy, Math.max(Math.abs(dx),Math.abs(dy)) !== 1, true);
+    }
+    // タイミングパターン
+    for (let i = 8; i < size-8; i++) { set(i,6,i%2===0,true); set(6,i,i%2===0,true); }
+    // 常に黒
+    set(8, size-8, true, true);
+    // フォーマット情報の領域を予約
+    for (let i = 0; i < 9; i++) { set(i,8,false,true); set(8,i,false,true); }
+    for (let i = 0; i < 8; i++) { set(size-1-i,8,false,true); set(8,size-1-i,false,true); }
+    // バージョン情報
+    if (ver >= 7) {
+      let v = ver;
+      for (let i = 0; i < 12; i++) v = (v<<1) ^ ((v>>>11)*0x1f25);
+      const bitsV = (ver<<12) | v;
+      for (let i = 0; i < 18; i++) {
+        const b = ((bitsV >> i) & 1) === 1;
+        set(Math.floor(i/3), size-11+i%3, b, true);
+        set(size-11+i%3, Math.floor(i/3), b, true);
+      }
+    }
+
+    // データをジグザグに配置
+    let idx = 0, bit = 0, upward = true;
+    for (let right = size-1; right >= 1; right -= 2) {
+      if (right === 6) right = 5;
+      for (let v = 0; v < size; v++) {
+        const y = upward ? size-1-v : v;
+        for (let c = 0; c < 2; c++) {
+          const x = right - c;
+          if (fn[y][x]) continue;
+          let dark = false;
+          if (idx < out.length) dark = ((out[idx] >>> (7-bit)) & 1) === 1;
+          mod[y][x] = dark;
+          if (++bit === 8) { bit = 0; idx++; }
+        }
+      }
+      upward = !upward;
+    }
+
+    /* --- マスク選択 --- */
+    const MASKS = [
+      (x,y)=>(x+y)%2===0, (x,y)=>y%2===0, (x,y)=>x%3===0, (x,y)=>(x+y)%3===0,
+      (x,y)=>(Math.floor(y/2)+Math.floor(x/3))%2===0, (x,y)=>(x*y)%2+(x*y)%3===0,
+      (x,y)=>((x*y)%2+(x*y)%3)%2===0, (x,y)=>((x+y)%2+(x*y)%3)%2===0
+    ];
+    let best = null, bestScore = Infinity;
+    for (let m = 0; m < 8; m++) {
+      const g = mod.map(r => r.slice());
+      for (let y=0;y<size;y++) for (let x=0;x<size;x++) if (!fn[y][x] && MASKS[m](x,y)) g[y][x] = !g[y][x];
+      applyFormat(g, fn, size, ecl, m);
+      const s = penalty(g, size);
+      if (s < bestScore) { bestScore = s; best = g; }
+    }
+    return best;
+  }
+
+  // フォーマット情報を規定の位置に置く。
+  // g は g[y][x] の順。規格の座標は (x, y) で書かれているので、入れ替えを間違えないこと。
+  function applyFormat(g, fn, size, ecl, mask) {
+    const data = (ECL_BITS[ecl] << 3) | mask;
+    let rem = data;
+    for (let i = 0; i < 10; i++) rem = (rem << 1) ^ ((rem >>> 9) * 0x537);
+    const bits = ((data << 10) | rem) ^ 0x5412;
+    const bit = (i) => ((bits >> i) & 1) === 1;
+
+    // 1つ目: 左上の位置検出パターンの周り
+    for (let i = 0; i <= 5; i++) g[i][8] = bit(i);        // (x=8, y=i)
+    g[7][8] = bit(6);                                     // (x=8, y=7)
+    g[8][8] = bit(7);                                     // (x=8, y=8)
+    g[8][7] = bit(8);                                     // (x=7, y=8)
+    for (let i = 9; i < 15; i++) g[8][14-i] = bit(i);     // (x=14-i, y=8)
+
+    // 2つ目: 右上と左下
+    for (let i = 0; i < 8; i++)  g[8][size-1-i] = bit(i); // (x=size-1-i, y=8)
+    for (let i = 8; i < 15; i++) g[size-15+i][8] = bit(i);// (x=8, y=size-15+i)
+    g[size-8][8] = true;                                  // 常に黒
+  }
+
+  function penalty(g, size) {
+    let p = 0;
+    // 連続
+    for (const line of [true, false]) {
+      for (let a = 0; a < size; a++) {
+        let run = 1;
+        for (let b = 1; b < size; b++) {
+          const cur = line ? g[a][b] : g[b][a];
+          const prv = line ? g[a][b-1] : g[b-1][a];
+          if (cur === prv) { run++; if (run === 5) p += 3; else if (run > 5) p++; }
+          else run = 1;
+        }
+      }
+    }
+    // 2x2
+    for (let y = 0; y < size-1; y++) for (let x = 0; x < size-1; x++)
+      if (g[y][x]===g[y][x+1] && g[y][x]===g[y+1][x] && g[y][x]===g[y+1][x+1]) p += 3;
+    // 偏り
+    let dark = 0;
+    for (let y=0;y<size;y++) for (let x=0;x<size;x++) if (g[y][x]) dark++;
+    p += Math.floor(Math.abs(dark*20 - size*size*10) / (size*size)) * 10;
+    return p;
+  }
+
+  function toSvg(text, opt = {}) {
+    const { ecc = "M", scale = 4, margin = 4 } = opt;
+    const m = encode(text, ecc);
+    const n = m.length;
+    const dim = (n + margin*2) * scale;
+    let path = "";
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++)
+      if (m[y][x]) path += `M${(x+margin)*scale} ${(y+margin)*scale}h${scale}v${scale}h-${scale}z`;
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${dim}" height="${dim}" viewBox="0 0 ${dim} ${dim}" shape-rendering="crispEdges">`
+      + `<rect width="${dim}" height="${dim}" fill="#fff"/><path d="${path}" fill="#000"/></svg>`;
+  }
+
+  return { encode, toSvg, capacityBytes };
+})();
+
+if (typeof module !== "undefined") module.exports = QR;
+
+</script>
+<script>
+const $ = (id) => document.getElementById(id);
+const entries = $("entries");
+$("date").value = new Date().toISOString().slice(0,10);
+
+/* ---------- タブ ---------- */
+function tab(which){
+  $("tab-make").classList.toggle("on", which==="make");
+  $("tab-open").classList.toggle("on", which==="open");
+  $("pane-make").classList.toggle("on", which==="make");
+  $("pane-open").classList.toggle("on", which==="open");
+}
+$("tab-make").onclick = () => tab("make");
+$("tab-open").onclick = () => tab("open");
+
+/* ---------- 項目 ---------- */
+function addEntry(data = {}) {
+  const el = document.createElement("div");
+  el.className = "entry";
+  el.innerHTML = `
+    <div class="head">
+      <strong>項目</strong><span class="spacer"></span>
+      <button class="del" title="削除">×</button>
+    </div>
+    <div class="row">
+      <div><label class="lbl">サービス / 何の情報か</label><input class="f-title" placeholder=""></div>
+      <div><label class="lbl">アカウント</label><input class="f-acct" placeholder=""></div>
+    </div>
+    <div><label class="lbl">メモ・手順（任意）</label><input class="f-note" placeholder=""></div>
+    <div style="margin-top:10px">
+      <label class="lbl">コード / トークン（1行に1つ）</label>
+      <textarea class="f-codes" placeholder=""></textarea>
+      <div class="hint">改行で区切ると、暗号化しない場合はチェックボックス付きで並びます。</div>
+    </div>`;
+  el.querySelector(".f-title").value = data.title || "";
+  el.querySelector(".f-acct").value  = data.acct  || "";
+  el.querySelector(".f-note").value  = data.note  || "";
+  el.querySelector(".f-codes").value = data.codes || "";
+  el.querySelector(".del").onclick = () => el.remove();
+  entries.append(el);
+  return el;
+}
+
+function collect() {
+  return [...entries.querySelectorAll(".entry")].map(el => ({
+    title: el.querySelector(".f-title").value.trim(),
+    acct:  el.querySelector(".f-acct").value.trim(),
+    note:  el.querySelector(".f-note").value.trim(),
+    codes: el.querySelector(".f-codes").value.split("\n").map(s=>s.trim()).filter(Boolean),
+  })).filter(e => e.title || e.acct || e.note || e.codes.length);
+}
+
+$("add").onclick = () => addEntry();
+$("clear").onclick = () => {
+  if (collect().length && !confirm("入力内容を全部消します。よろしいですか。")) return;
+  entries.textContent = ""; addEntry();
+};
+
+/* ---------- パスフレーズの強さ ---------- */
+function rateStrength(p){
+  if (!p) return ["", ""];
+  const len = [...p].length;
+  if (len < 12) return ["weak", "短すぎます。12文字以上、できれば文章で。"];
+  if (len < 20) return ["weak", "もう少し長くしてください。文章にすると覚えやすく強くなります。"];
+  return ["good", `${len}文字。覚えていられるなら十分です。`];
+}
+$("pass1").addEventListener("input", () => {
+  const [cls, msg] = rateStrength($("pass1").value);
+  const el = $("strength"); el.className = "strength " + cls; el.textContent = msg;
+});
+
+/* ---------- 暗号化 ---------- */
+// 形式: OWJ1.<base64url(salt16)>.<base64url(iv12)>.<base64url(ciphertext)>
+// 鍵導出: PBKDF2-SHA256 / 600000回 / AES-GCM 256bit
+const ITER = 600000;
+const enc = new TextEncoder(), dec = new TextDecoder();
+
+function b64u(buf){
+  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+}
+function unb64u(s){
+  s = s.replace(/-/g,"+").replace(/_/g,"/");
+  while (s.length % 4) s += "=";
+  return Uint8Array.from(atob(s), c => c.charCodeAt(0));
+}
+async function deriveKey(pass, salt){
+  const base = await crypto.subtle.importKey("raw", enc.encode(pass.normalize("NFKC")), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    { name:"PBKDF2", salt, iterations:ITER, hash:"SHA-256" },
+    base, { name:"AES-GCM", length:256 }, false, ["encrypt","decrypt"]);
+}
+async function encryptText(plain, pass){
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv   = crypto.getRandomValues(new Uint8Array(12));
+  const key  = await deriveKey(pass, salt);
+  const ct   = await crypto.subtle.encrypt({name:"AES-GCM", iv}, key, enc.encode(plain));
+  return ["OWJ1", b64u(salt), b64u(iv), b64u(ct)].join(".");
+}
+async function decryptText(blob, pass){
+  const parts = blob.replace(/\s+/g,"").split(".");
+  if (parts.length !== 4 || parts[0] !== "OWJ1") throw new Error("形式が違います");
+  const key = await deriveKey(pass, unb64u(parts[1]));
+  const pt  = await crypto.subtle.decrypt({name:"AES-GCM", iv:unb64u(parts[2])}, key, unb64u(parts[3]));
+  return dec.decode(pt);
+}
+
+/* 紙に写しやすいよう、8文字ごとに区切って折り返す */
+function groupForPrint(s){
+  return s.replace(/(.{8})/g, "$1 ").replace(/(\S+\s){10}/g, "$&\n").trim();
+}
+
+function plainTextDump(){
+  const items = collect();
+  return items.map(e => {
+    const L = [];
+    L.push("■ " + (e.title || "(無題)"));
+    if (e.acct) L.push("  アカウント: " + e.acct);
+    if (e.note) L.push("  メモ: " + e.note);
+    e.codes.forEach(c => L.push("  - " + c));
+    return L.join("\n");
+  }).join("\n\n");
+}
+
+/* ---------- 印刷用の組み立て ---------- */
+function esc(s){ return s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+function sheetHeader(){
+  const d = $("date").value || "";
+  const place = $("place").value.trim();
+  return `
+    <h2>${esc($("title").value)}</h2>
+    <p class="sheetmeta">
+      作成日 ${esc(d)}${place ? " ・ 保管場所 " + esc(place) : ""}
+      
+    </p>`;
+}
+function sheetFooter(n){
+  return `<div class="foot">
+      <span>${esc($("title").value)} ・ ${esc($("date").value||"")}</span>
+      <span>${n}</span>
+    </div>`;
+}
+
+function buildPlainSheet() {
+  const items = collect();
+  $("sheet").innerHTML = sheetHeader() + `
+    <div class="caution">
+      第三者に渡さないこと。内容を更新したら古いものは処分すること。
+    </div>
+    ${items.map(e => `
+      <div class="item">
+        <p class="t">${esc(e.title || "(無題)")}</p>
+        ${e.acct ? `<p class="a">${esc(e.acct)}</p>` : ""}
+        ${e.note ? `<p class="n">${esc(e.note)}</p>` : ""}
+        ${e.codes.length ? `<div class="codes">${
+          e.codes.map(c => `<span class="code"><span class="box"></span>${esc(c)}</span>`).join("")
+        }</div>` : ""}
+      </div>`).join("")}
+    ` + sheetFooter(`項目 ${items.length} 件`);
+}
+
+// 項目ごとにQRを1つ作る。タイトルとメモは平文で印刷し、
+// アカウントとコードだけを暗号化してQRに入れる。
+// タイトルが見えても実害は小さく、緊急時にどのQRを読めばよいか分かる利点が大きい。
+// 紙に載せる復号スニペット。ツールもネットも無いときの最後の手段。
+// ブラウザのコンソールに貼って使う。外部依存なし。
+const DECRYPT_SNIPPET = '(async(b,p)=>{const[,s,i,c]=b.split("."),u=x=>Uint8Array.from(atob(x.replace(/-/g,"+").replace(/_/g,"/")),h=>h.charCodeAt(0)),k=await crypto.subtle.deriveKey({name:"PBKDF2",salt:u(s),iterations:600000,hash:"SHA-256"},await crypto.subtle.importKey("raw",new TextEncoder().encode(p),"PBKDF2",0,["deriveKey"]),{name:"AES-GCM",length:256},0,["decrypt"]);return new TextDecoder().decode(await crypto.subtle.decrypt({name:"AES-GCM",iv:u(i)},k,u(c)))})';
+
+function buildQrSheet(items) {
+  const url = $("toolUrl").value.trim();
+  const fbSvg = QR.toSvg(DECRYPT_SNIPPET, { ecc:"M", scale:4, margin:3 });
+  $("sheet").innerHTML = sheetHeader() + `
+    <div class="caution">
+      QRの中身は暗号化されています。復号にはパスフレーズが必要です。
+    </div>
+    ${items.map(it => `
+      <div class="qitem">
+        <div class="qr">${it.svg}</div>
+        <div class="body">
+          <p class="t">${esc(it.title || "(無題)")}</p>
+          ${it.note ? `<p class="n">${esc(it.note)}</p>` : ""}
+          <p class="len">${it.bytes} 文字 / ${it.ver}</p>
+        </div>
+      </div>`).join("")}
+    <div class="howto">
+      <b>読み方</b><br>
+      1. 各項目のQRをスマホのカメラで読む。暗号文（<code>OWJ1.</code> で始まる文字列）が出る<br>
+      2. ツールを開く${url ? `： <b>${esc(url)}</b>` : "（<code>recovery-sheet.html</code>）"}<br>
+      3. 「読む（復号）」タブに暗号文を貼り、パスフレーズを入れて「復号する」<br>
+    </div>
+    <div class="fallback">
+      <div class="fbqr">${fbSvg}</div>
+      <div class="fbbody">
+        <p class="fbt">オフラインでの復号</p>
+        <p class="fbn">
+          この QR を読むと JavaScript のコードが出る。ブラウザの開発者コンソールに貼って
+          <code>const d = &lt;貼り付けたコード&gt;</code> として、<code>await d("暗号文", "パスフレーズ")</code> を実行する。
+          外部ライブラリもネットワークも不要。<br>
+          仕様: AES-GCM 256bit / PBKDF2-SHA256 ${ITER.toLocaleString()}回 /
+          形式 <code>OWJ1.salt.iv.ciphertext</code>（いずれも base64url）。
+        </p>
+      </div>
+    </div>
+    ` + sheetFooter(`暗号化済み ・ 項目 ${items.length} 件`);
+}
+
+/* ---------- 実行 ---------- */
+$("printPlain").onclick = () => {
+  if (!collect().length) { $("encMsg").textContent = "項目がありません"; return; }
+  if (!confirm("暗号化せずに印刷します。紙を見た人は全部読めます。よろしいですか。")) return;
+  buildPlainSheet(); window.print();
+};
+
+$("encrypt").onclick = async () => {
+  const msg = $("encMsg"); msg.textContent = "";
+  const items = collect();
+  if (!items.length) { msg.textContent = "項目がありません"; return; }
+  const p1 = $("pass1").value, p2 = $("pass2").value;
+  if (!p1) { msg.textContent = "パスフレーズを入れてください"; return; }
+  if (p1 !== p2) { msg.textContent = "2つのパスフレーズが一致しません"; return; }
+  if ([...p1].length < 12) { msg.textContent = "パスフレーズが短すぎます（12文字以上）"; return; }
+
+  $("encrypt").disabled = true; msg.textContent = "暗号化しています…";
+  try {
+    const out = [];
+    for (const e of items) {
+      // 暗号化するのはアカウントとコード。タイトルとメモは平文で紙に出す。
+      const secret = [
+        e.acct ? "アカウント: " + e.acct : "",
+        ...e.codes
+      ].filter(Boolean).join("\n");
+      if (!secret) { out.push({ ...e, svg:"", bytes:0, ver:"—" }); continue; }
+
+      const cipher = await encryptText(secret, p1);
+      const back = await decryptText(cipher, p1);          // 自己検証
+      if (back !== secret) throw new Error(`「${e.title}」の検証に失敗しました`);
+
+      const m = QR.encode(cipher, "M");                     // 読めることを先に確認
+      out.push({
+        ...e,
+        svg: QR.toSvg(cipher, { ecc:"M", scale:4, margin:3 }),
+        bytes: cipher.length,
+        ver: `QR v${(m.length-17)/4}`
+      });
+    }
+    buildQrSheet(out);
+    msg.textContent = "";
+    window.print();
+  } catch (e) {
+    msg.textContent = "失敗: " + e.message;
+  } finally {
+    $("encrypt").disabled = false;
+  }
+};
+
+$("decrypt").onclick = async () => {
+  const msg = $("decMsg"); msg.textContent = "";
+  const blob = $("cipherIn").value.trim();
+  const pass = $("passOpen").value;
+  if (!blob) { msg.textContent = "暗号文を貼り付けてください"; return; }
+  if (!pass) { msg.textContent = "パスフレーズを入れてください"; return; }
+  $("decrypt").disabled = true; msg.textContent = "復号しています…";
+  try {
+    $("out").value = await decryptText(blob, pass);
+    msg.textContent = "復号しました";
+  } catch (e) {
+    $("out").value = "";
+    msg.textContent = /形式/.test(e.message) ? e.message
+      : "復号できません。パスフレーズか、写し間違いを確認してください。";
+  } finally {
+    $("decrypt").disabled = false;
+  }
+};
+
+window.addEventListener("beforeunload", (e) => {
+  if (collect().length || $("out").value) { e.preventDefault(); e.returnValue = ""; }
+});
+
+addEntry();
+</script>
+</html>
