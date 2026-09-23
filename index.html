@@ -71,6 +71,9 @@
   .pane.on{display:block}
 
   #out{min-height:200px;font-size:12px;line-height:1.5}
+  #camWrap{margin:0 0 14px}
+  #cam{width:100%;max-width:420px;aspect-ratio:1;object-fit:cover;
+    background:#000;border:1px solid var(--line);border-radius:12px;display:block}
   .strength{font-size:12px;margin-top:5px}
   .strength.weak{color:var(--warn)}
   .strength.good{color:var(--ok)}
@@ -137,9 +140,7 @@
     <p class="sub"></p>
   </header>
 
-  <div class="note warn">
-    入力内容は保存されません。ネットワークにも送りません。
-  </div>
+  <div class="note warn">入力内容は保存されません。ネットワークにも送りません。</div>
 
   <div class="tabs">
     <button id="tab-make" class="on">作る</button>
@@ -178,9 +179,7 @@
 
     <div id="entries"></div>
 
-    <div class="note ok" style="margin-top:20px">
-      パスフレーズは保存されません。忘れると復号できません。
-    </div>
+    <div class="note ok" style="margin-top:20px">パスフレーズは保存されません。忘れると復号できません。</div>
 
     <div class="meta">
       <div>
@@ -206,12 +205,24 @@
   <!-- ========== 読む ========== -->
   <div class="pane" id="pane-open">
     <div class="note warn">
-      紙に書かれた暗号文をここに貼り付け、パスフレーズを入れると中身が出ます。
-      改行や空白は無視されるので、見たまま写して構いません。
+      紙の QR をカメラで読み取るか、読み取った文字列を貼り付けます。
+      そのあとパスフレーズを入れると中身が出ます。改行や空白は無視されます。
     </div>
+
+    <div class="bar" id="camBar" hidden>
+      <button id="camStart">カメラで読み取る</button>
+      <button id="camStop" hidden>カメラを止める</button>
+      <span class="spacer"></span>
+      <span class="hint" id="camMsg"></span>
+    </div>
+    <div id="camWrap" hidden>
+      <video id="cam" playsinline muted></video>
+      <div class="hint">QR を枠に入れると自動で読み取ります。</div>
+    </div>
+
     <div>
       <label class="lbl">暗号文</label>
-      <textarea id="cipherIn" style="min-height:160px" placeholder=""></textarea>
+      <textarea id="cipherIn" style="min-height:160px" placeholder="OWJ1 ...."></textarea>
     </div>
     <div class="meta" style="margin-top:12px">
       <div>
@@ -714,9 +725,10 @@ function buildQrSheet(items) {
       </div>`).join("")}
     <div class="howto">
       <b>読み方</b><br>
-      1. 各項目のQRをスマホのカメラで読む。暗号文（<code>OWJ1.</code> で始まる文字列）が出る<br>
-      2. ツールを開く${url ? `： <b>${esc(url)}</b>` : "（<code>recovery-sheet.html</code>）"}<br>
-      3. 「読む（復号）」タブに暗号文を貼り、パスフレーズを入れて「復号する」<br>
+      1. ツールを開く${url ? `： <b>${esc(url)}</b>` : "（<code>recovery-sheet.html</code>）"}<br>
+      2. 「読む（復号）」タブで「カメラで読み取る」を押し、目的の項目のQRを写す<br>
+      3. パスフレーズを入れて「復号する」<br>
+      カメラが使えないときは、QRをスマホの標準カメラで読んで出た文字列を貼り付ける<br>
     </div>
     <div class="fallback">
       <div class="fbqr">${fbSvg}</div>
@@ -782,6 +794,73 @@ $("encrypt").onclick = async () => {
     $("encrypt").disabled = false;
   }
 };
+
+/* ---------- カメラで QR を読む ---------- */
+// BarcodeDetector があるブラウザだけで有効にする。無ければボタンごと出さず、手入力に任せる。
+// 映像はどこにも送らず、ブラウザ内で処理して破棄する。
+(() => {
+  const supported = ("BarcodeDetector" in window)
+    && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  if (!supported) return;
+  $("camBar").hidden = false;
+
+  let stream = null, timer = null, detector = null;
+
+  async function start() {
+    const msg = $("camMsg"); msg.textContent = "";
+    try {
+      const fmts = await BarcodeDetector.getSupportedFormats();
+      if (!fmts.includes("qr_code")) { msg.textContent = "この環境では QR に対応していません"; return; }
+      detector = new BarcodeDetector({ formats: ["qr_code"] });
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 1280 } },
+        audio: false
+      });
+      const v = $("cam");
+      v.srcObject = stream; await v.play();
+      $("camWrap").hidden = false;
+      $("camStart").hidden = true; $("camStop").hidden = false;
+      msg.textContent = "読み取り中…";
+      timer = setInterval(scan, 250);
+    } catch (e) {
+      msg.textContent = e.name === "NotAllowedError"
+        ? "カメラの使用が許可されませんでした。手入力してください。"
+        : "カメラを開けませんでした: " + e.message;
+      stop();
+    }
+  }
+
+  async function scan() {
+    const v = $("cam");
+    if (!detector || v.readyState < 2) return;
+    try {
+      const found = await detector.detect(v);
+      if (!found.length) return;
+      const text = found[0].rawValue || "";
+      if (!text) return;
+      $("cipherIn").value = text;
+      $("camMsg").textContent = /^OWJ1\./.test(text)
+        ? "読み取りました。パスフレーズを入れてください。"
+        : "読み取りましたが、この形式ではありません。";
+      stop();
+      $("passOpen").focus();
+    } catch { /* 1フレーム失敗しても次で拾う */ }
+  }
+
+  function stop() {
+    if (timer) { clearInterval(timer); timer = null; }
+    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+    const v = $("cam"); if (v) v.srcObject = null;
+    $("camWrap").hidden = true;
+    $("camStart").hidden = false; $("camStop").hidden = true;
+  }
+
+  $("camStart").onclick = start;
+  $("camStop").onclick  = () => { stop(); $("camMsg").textContent = ""; };
+  // タブを離れたらカメラを止める
+  $("tab-make").addEventListener("click", stop);
+  window.addEventListener("pagehide", stop);
+})();
 
 $("decrypt").onclick = async () => {
   const msg = $("decMsg"); msg.textContent = "";
